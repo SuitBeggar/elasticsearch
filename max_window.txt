@@ -1,0 +1,3 @@
+curl -XPUT  '10.252.6.22:9013/policyinfo_index/_settings' -d '{ "index" : {"max_result_window" :10000000}}'
+
+curl -XPUT  '10.252.6.22:9013/caseinfo_index/_settings' -d '{ "index" : {"max_result_window" :10000000}}'
