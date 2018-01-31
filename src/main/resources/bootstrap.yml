@@ -1,0 +1,94 @@
+spring:
+  profiles:
+    active: local
+  application:
+    name: ESserver
+
+server:
+  port: 9016     	    	
+logging:
+    config: classpath:logback-${spring.profiles.active}.xml  
+management:  
+  security:  
+    enabled: false # spring-boot 1.5.2之后严格执行安全策略，所以需要配置这个为false ,否则很多点监控不到  
+  health:
+    defaults:
+      enabled: false
+#    rabbit:
+#      enabled: true #只使用rabbit来做日志时，禁用健康检查   
+---
+mybatis:
+  mapperLocations: classpath*:mapper/*Dao.xml
+  executor-type: REUSE
+
+
+applications:
+ elasticsearch:
+    clustername: my-application
+    clusternode: 192.168.20.83:9301
+ applicationlist:
+   -
+      indexname: policyindex_index
+      datasource:
+         name: policyindex_index
+         url: jdbc:oracle:thin:@192.168.20.85:1521:orcl
+         username: dhoratest
+         password: dhoratest
+         driverclassname: oracle.jdbc.driver.OracleDriver
+      indextypelist:
+       -
+         name: policyindex_index
+         primarysql: select POLICYNO AS policyNo,CLASSCODE AS classCode,RISKCODE AS riskCode,COMCODE AS comCode,APPLICODE AS appliCode,APPLINAME AS appliName,INSUREDCODE AS insuredCode,INSUREDNAME AS insuredName,OPERATEDATE AS operateDate,STARTDATE AS startDate,ENDDATE AS endDate,CURRENCY AS currency,BUSINESSPLATE AS businessPlate from PRPCMAIN where POLICYNO = ${primarykey}
+         primarykey: POLICYNO
+         primarykeysql: select POLICYNO from PRPCMAIN
+         incrementsql: select distinct REGISTNO AS registNo from prpLwftaskin  where OPERATETIMEFORHIS &lt;= ${nowDate} and OPERATETIMEFORHIS &gt;= ${oldDate} UNION select REGISTNO AS registNo from prplclaim where OPERATETIMEFORHIS &lt;= ${nowDate} and OPERATETIMEFORHIS &gt;= ${oldDate} UNION select REGISTNO AS registNo from prplcompensate where OPERATETIMEFORHIS &lt;= ${nowDate} and OPERATETIMEFORHIS &gt;= ${oldDate}
+         timediffer: 50000   #单位ms 1000*60*
+         scheduled: "0/50 * * * * ?"
+         syncswitch: true
+         syncthreadcount: 30
+         childsqlmap:
+          - name: PRPCINSURED
+            sql: select POLICYNO,INSUREDCODE,INSUREDNAME,IDENTIFYNUMBER from PRPCINSURED
+            fk: POLICYNO
+         highfield: POLICYNO,APPLINAME,INSUREDNAME
+         analysfield:
+           - field: APPLINAME
+             analyzer: ik_smart
+             searchanalyzer: ik_smart
+           - field: INSUREDNAME
+             analyzer: ik_smart
+             searchanalyzer: ik_smart
+           - field: PRPCINSURED.INSUREDNAME
+             analyzer: ik_smart
+             searchanalyzer: ik_smart
+   -
+      indexname: caseindex_index
+      datasource:
+         name: caseindex_index
+         url: jdbc:oracle:thin:@192.168.20.85:1521:orcl
+         username: dhoratest
+         password: dhoratest
+         driverclassname: oracle.jdbc.driver.OracleDriver
+      indextypelist:
+       -
+         name: caseindex_index
+         primarysql: select regist.REGISTNO AS REGISTNO,policy.POLICYNO As POLICYNO,regist.BUSINESSPLATE As BUSINESSPLATE,policy.CLASSCODE As CLASSCODE,regist.RISKCODE As RISKCODE,regist.COMCODE AS COMCODE,regist.REPORTTIME AS REPORTTIME,policy.INSUREDNAME AS INSUREDNAME,damage.DAMAGETIME As DAMAGETIME,damage.DAMAGECODE AS DAMAGECODE,comondata1.dataname AS DAMAGENAME,comondata2.dataname AS RISKNAME,comondata3.dataname AS CLASSNAME,comondata4.dataname AS BUSINESSPLATENAME,(company.printcomname||company.comcname) AS COMCNAME from PrpLRegist regist join PrpLRegistDemage damage on regist.registNo = damage.registNo and regist.registNo = ${primarykey} join PrPLRegistSummary policy on  regist.registNo = policy.registNo and damage.registNo = policy.registNo left join COMMONDATA comondata1 on comondata1.datacode = damage.DAMAGECODE and comondata1.datatype = 'damage' left join COMMONDATA comondata2 on comondata2.datacode = regist.RISKCODE and comondata2.datatype = 'risk' left join COMMONDATA comondata3 on comondata3.datacode = policy.CLASSCODE and comondata3.datatype = 'insurance' left join COMMONDATA comondata4 on comondata4.datacode = regist.BUSINESSPLATE and comondata4.datatype = 'BusinessPlate' left join PRPDCOMPANY company on company.comcode = regist.COMCODE
+         primarykey: REGISTNO
+         primarykeysql: select regist.REGISTNO AS registNo from PrpLRegist regist,PrpLRegistDemage damage,PrPLRegistSummary policy where regist.registNo = damage.registNo and regist.registNo = policy.registNo and damage.registNo = policy.registNo
+         incrementsql: select distinct REGISTNO AS registNo from prpLwftaskin  where taskintime <= ${nowDate} and taskintime >= ${oldDate} UNION select REGISTNO AS registNo from prplclaim where createtime <= ${nowDate} and createtime >= ${oldDate} UNION select REGISTNO AS registNo from prplcompensate where createtime <= ${nowDate} and createtime >= ${oldDate}
+         timediffer: 50000   #单位ms 1000*60*30
+         scheduled: "0/50 * * * * ?"
+         syncswitch: true
+         syncthreadcount: 30
+         childsqlmap:
+          - name: PRPLCLAIM
+            sql: select CLAIMNO AS claimNo from PRPLCLAIM
+            fk: REGISTNO
+         highfield: POLICYNO,INSUREDNAME,REGISTNO,DAMAGENAME
+         analysfield:
+           - field: INSUREDNAME
+             analyzer: ik_smart
+             searchanalyzer: ik_smart
+           - field: RISKNAME
+             analyzer: ik_smart
+             searchanalyzer: ik_smart
